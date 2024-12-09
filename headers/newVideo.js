@@ -1,0 +1,42 @@
+import amqp from "amqplib";
+
+const receiveMail = async () => {
+  try {
+    const connection = await amqp.connect("amqp://localhost");
+    const channel = await connection.createChannel();
+
+    const exchange="header_exchange";
+    const exchangeType="headers";
+
+    await channel.assertExchange(exchange,exchangeType,{durable:true});
+    
+    //this is the temporary queue which will delete after connection closed
+   const q=await channel.assertQueue("",{exclusive:true});
+
+   console.log("waiting for new video notification");
+
+   //this defines which type of message accept if match the condition then it push into the queue
+    await channel.bindQueue(q.queue,exchange,"",{
+        "x-match":"all",
+        "notification-type":"new-video",
+        "content-type":"video"
+    });//bind the queue
+
+     channel.consume(q.queue,(message)=>{
+        if(message!==null){
+          const product=JSON.parse(message.content)
+        console.log(`receives new video notification:`,product);
+        //acknowledge the message after receive the message
+        channel.ack(message);
+        }
+     },
+     {noAck:false}
+    );
+  }catch(err){
+    console.log(err);
+  }
+}
+
+receiveMail();
+   
+   
